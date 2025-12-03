@@ -13,9 +13,8 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# 👇 Add your real Vercel URL here
+# CORS - kept simple so it doesn't break other files/frontends using this
 CORS(app)
-
 
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
@@ -39,11 +38,13 @@ def compress_image(image_bytes, max_size_mb=4):
 
     img = Image.open(io.BytesIO(image_bytes))
 
+    # Convert to RGB if image has alpha / palette
     if img.mode in ('RGBA', 'LA', 'P'):
         background = Image.new('RGB', img.size, (255, 255, 255))
         background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
         img = background
 
+    # Resize if very large
     max_dimension = 1920
     if max(img.size) > max_dimension:
         img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
@@ -121,28 +122,33 @@ Remember: Restaurant owners want ACTIONABLE INSIGHTS with MEASURABLE IMPACT, not
 """
 
 
-
-
 def analyze_image_with_openai(image_bytes):
+    """Call OpenAI vision model and return parsed JSON."""
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
     response = openai_client.chat.completions.create(
         model="gpt-4o-mini",
-        response_format={"type": "json_object"},   # ✅ VERY IMPORTANT
+        response_format={"type": "json_object"},   # forces JSON response
         messages=[
-            {"role": "system", "content": NEURO_ANALYSIS_PROMPT},
+            {
+                "role": "system",
+                "content": NEURO_ANALYSIS_PROMPT,
+            },
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "Analyze this restaurant interior strictly using the schema."},
+                    {
+                        "type": "text",
+                        "text": "Analyze this restaurant interior strictly using the schema.",
+                    },
                     {
                         "type": "image_url",
                         "image_url": {
                             "url": f"data:image/jpeg;base64,{image_b64}"
-                        }
-                    }
-                ]
-            }
+                        },
+                    },
+                ],
+            },
         ],
         temperature=0.6,
         max_tokens=3500,
@@ -150,49 +156,18 @@ def analyze_image_with_openai(image_bytes):
 
     raw = response.choices[0].message.content
 
-    print("🔍 RAW OPENAI OUTPUT:\n", raw[:1200])   # ← THIS WILL SHOW US IF JSON IS BROKEN
+    print("🔍 RAW OPENAI OUTPUT:\n", raw[:1200])
 
-    return json.loads(raw)
-
-    """Call OpenAI vision model and return parsed JSON"""
-    base64_image = base64.b64encode(image_bytes).decode("utf-8")
-
-    completion = openai_client.chat.completions.create(
-        model="gpt-4o-mini",  # or "gpt-4o" if you want max quality
-        response_format={"type": "json_object"},
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a neuro-aesthetic scoring engine. Return ONLY valid JSON matching the provided schema.",
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": NEURO_ANALYSIS_PROMPT,
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}"
-                        },
-                    },
-                ],
-            },
-        ],
-        temperature=0.8,
-        max_tokens=6000,
-    )
-
-    response_text = completion.choices[0].message.content.strip()
-
-    # Safety: strip code fences if the model ever adds them
-    if response_text.startswith("`"):
-        response_text = re.sub(r"^```(?:json)?", "", response_text)
-        response_text = re.sub(r"\n?```\s*$", "", response_text)
-
-    return json.loads(response_text)
+    # Because we used response_format=json_object, this should already be valid JSON,
+    # but we still guard against weird edge cases:
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?", "", cleaned)
+            cleaned = re.sub(r"```$", "", cleaned).strip()
+        return json.loads(cleaned)
 
 
 def transform_for_frontend(analysis_data):
@@ -213,11 +188,16 @@ def transform_for_frontend(analysis_data):
             metric['icon'] = icon_map.get(metric.get('id'), "Sparkles")
             metric['color'] = color_map.get(metric.get('id'), "bg-slate-500")
 
+    # Static ideal image for now (frontend expects this)
     analysis_data['idealImage'] = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1000&auto=format&fit=crop"
 
     return analysis_data
+
+
 def normalize_analysis(analysis):
     """Ensure the JSON has all fields the frontend expects."""
+    if analysis is None:
+        analysis = {}
 
     # --- Scores ---
     scores = analysis.get("scores") or {}
