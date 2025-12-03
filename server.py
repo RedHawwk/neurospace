@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from dotenv import load_dotenv
 from openai import OpenAI
 import os
@@ -12,46 +12,43 @@ import io
 
 load_dotenv()
 
+
 app = Flask(__name__)
 
-# 🔥 FIXED CORS - Allow both local and production origins
-CORS(app, 
-     resources={r"/*": {
-         "origins": [
-             "http://localhost:5173",           # Vite local dev
-             "http://localhost:3000",           # React local dev  
-             "http://127.0.0.1:5173",
-             "https://neurospace-orcin.vercel.app",  # Your Vercel frontend
-             "https://*.vercel.app"              # All Vercel preview deployments
-         ],
-         "methods": ["GET", "POST", "OPTIONS"],
-         "allow_headers": ["Content-Type"],
-         "supports_credentials": False,
-         "max_age": 3600
-     }}
-)
+
+# 🔥 SIMPLER CORS - Allow all origins (works reliably on Render)
+CORS(app, origins="*", supports_credentials=False)
+
 
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
+
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+
 
 
 def allowed_file(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+
 def compress_image(image_bytes: bytes, max_size_mb: int = 4) -> bytes:
     """Compress image if it's too large for the API"""
     max_size_bytes = max_size_mb * 1024 * 1024
 
+
     if len(image_bytes) <= max_size_bytes:
         return image_bytes
 
+
     print(f"⚠️ Image too large ({len(image_bytes)/1024/1024:.1f}MB), compressing...")
 
+
     img = Image.open(io.BytesIO(image_bytes))
+
 
     # Convert to RGB if image has alpha / palette
     if img.mode in ('RGBA', 'LA', 'P'):
@@ -59,32 +56,41 @@ def compress_image(image_bytes: bytes, max_size_mb: int = 4) -> bytes:
         background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
         img = background
 
+
     # Resize if very large
     max_dimension = 1920
     if max(img.size) > max_dimension:
         img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
 
+
     output = io.BytesIO()
     quality = 85
+
 
     while quality > 20:
         output.seek(0)
         output.truncate()
         img.save(output, format='JPEG', quality=quality, optimize=True)
 
+
         if output.tell() <= max_size_bytes:
             print(f"✅ Compressed to {output.tell()/1024/1024:.1f}MB (quality: {quality})")
             return output.getvalue()
 
+
         quality -= 10
 
+
     return output.getvalue()
+
 
 
 NEURO_ANALYSIS_PROMPT = """
 You are Dr. Maya Chen, a neuro-aesthetic consultant who has worked with 200+ restaurants generating $50M+ in revenue optimization through design psychology.
 
+
 Analyze this restaurant interior with surgical precision. Focus on SPECIFIC visual elements you can see, not generic statements.
+
 
 CRITICAL INSTRUCTIONS:
 - BE BRUTALLY SPECIFIC about what you see in the image (exact colors, materials, layout)
@@ -93,7 +99,9 @@ CRITICAL INSTRUCTIONS:
 - AVOID generic statements like "warm atmosphere" - instead say "2700K Edison bulbs creating amber glow reducing cortisol 18%"
 - Every score must be justified by something VISIBLE in the image
 
+
 Return ONLY valid JSON (no markdown, no explanations outside JSON):
+
 
 {
   "scores": {
@@ -246,6 +254,7 @@ Return ONLY valid JSON (no markdown, no explanations outside JSON):
   ]
 }
 
+
 ANALYSIS CHECKLIST - Mention in your analysis:
 ✓ Exact color temperatures (e.g., 2700K vs 4000K)
 ✓ Specific materials (velvet, brass, reclaimed wood, terrazzo, etc.)
@@ -258,13 +267,16 @@ ANALYSIS CHECKLIST - Mention in your analysis:
 ✓ Color psychology with specific hues
 ✓ Realistic financial projections based on visible quality tier
 
+
 Remember: Restaurant owners want ACTIONABLE INSIGHTS with MEASURABLE IMPACT, not academic theory.
 """
+
 
 
 def analyze_image_with_openai(image_bytes: bytes) -> dict:
     """Call OpenAI vision model and return parsed JSON."""
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
 
     response = openai_client.chat.completions.create(
         model="gpt-4o-mini",
@@ -292,17 +304,20 @@ def analyze_image_with_openai(image_bytes: bytes) -> dict:
         max_tokens=3500,
     )
 
+
     raw = response.choices[0].message.content
     print("🔍 RAW OPENAI OUTPUT (truncated):\n", raw[:1200])
+
 
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
         cleaned = raw.strip()
-        if cleaned.startswith("```"):
+        if cleaned.startswith("```
             cleaned = re.sub(r"^```(?:json)?", "", cleaned)
-            cleaned = re.sub(r"```$", "", cleaned).strip()
+            cleaned = re.sub(r"```
         return json.loads(cleaned)
+
 
 
 def transform_for_frontend(analysis_data: dict) -> dict:
@@ -312,11 +327,13 @@ def transform_for_frontend(analysis_data: dict) -> dict:
         5: "Zap", 6: "Target", 7: "Users", 8: "Award", 9: "Share2"
     }
 
+
     color_map = {
         1: "bg-orange-500", 2: "bg-teal-500", 3: "bg-amber-500",
         4: "bg-indigo-500", 5: "bg-blue-500", 6: "bg-purple-500",
         7: "bg-rose-500", 8: "bg-emerald-500", 9: "bg-pink-500"
     }
+
 
     if 'neuroMetrics' in analysis_data:
         for metric in analysis_data['neuroMetrics']:
@@ -324,12 +341,16 @@ def transform_for_frontend(analysis_data: dict) -> dict:
             metric['icon'] = icon_map.get(mid, "Sparkles")
             metric['color'] = color_map.get(mid, "bg-slate-500")
 
+
+    # Static ideal image for now (frontend expects this)
     analysis_data['idealImage'] = (
         "https://images.unsplash.com/photo-1559339352-11d035aa65de"
         "?q=80&w=1000&auto=format&fit=crop"
     )
 
+
     return analysis_data
+
 
 
 def normalize_analysis(analysis: dict) -> dict:
@@ -337,6 +358,8 @@ def normalize_analysis(analysis: dict) -> dict:
     if analysis is None:
         analysis = {}
 
+
+    # --- Scores ---
     scores = analysis.get("scores") or {}
     analysis["scores"] = {
         "overall": scores.get("overall", 75),
@@ -347,6 +370,8 @@ def normalize_analysis(analysis: dict) -> dict:
         "clutter": scores.get("clutter", 50),
     }
 
+
+    # --- Financials ---
     fin = analysis.get("financials") or {}
     analysis["financials"] = {
         "currentDwell": fin.get("currentDwell", 45),
@@ -356,6 +381,8 @@ def normalize_analysis(analysis: dict) -> dict:
         "monthlyRevenueUplift": fin.get("monthlyRevenueUplift", 5000),
     }
 
+
+    # --- Metrics for radar chart ---
     if not analysis.get("metrics"):
         s = analysis["scores"]
         analysis["metrics"] = [
@@ -367,9 +394,12 @@ def normalize_analysis(analysis: dict) -> dict:
             {"subject": "Acoustics", "A": 65, "B": 75, "fullMark": 100},
         ]
 
+
+    # --- Neuro Metrics (cards) ---
     neuro = analysis.get("neuroMetrics") or []
     cleaned = []
     next_id = 1
+
 
     for m in neuro:
         cleaned.append({
@@ -383,6 +413,8 @@ def normalize_analysis(analysis: dict) -> dict:
         })
         next_id += 1
 
+
+    # If model gave nothing at all, make at least 2 cards
     if not cleaned:
         overall_10 = round(analysis["scores"]["overall"] / 10, 1)
         cleaned = [
@@ -406,62 +438,96 @@ def normalize_analysis(analysis: dict) -> dict:
             },
         ]
 
+
     analysis["neuroMetrics"] = cleaned
 
+
+    # Ensure insights & objects exist
     if "insights" not in analysis or not isinstance(analysis["insights"], list):
         analysis["insights"] = []
+
 
     if "objects" not in analysis or not isinstance(analysis["objects"], list):
         analysis["objects"] = []
 
+
     return analysis
 
 
-@app.route('/analyze', methods=['POST', 'OPTIONS'])
+
+# 🔥 ERROR HANDLERS FOR BETTER DEBUGGING
+@app.errorhandler(500)
+def internal_error(error):
+    print(f"❌ 500 Error: {str(error)}")
+    return jsonify({"error": "Internal server error", "details": str(error)}), 500
+
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    print(f"❌ Unhandled Exception: {str(e)}")
+    import traceback
+    traceback.print_exc()
+    return jsonify({"error": str(e)}), 500
+
+
+
+@app.route('/analyze', methods=['POST'])
+@cross_origin()
 def analyze():
-    # Handle preflight OPTIONS request
-    if request.method == 'OPTIONS':
-        return '', 204
-    
     print("🧠 NeuroSpace: Received image for analysis...")
+
 
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
 
+
     file = request.files['file']
+
 
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
 
+
     if not allowed_file(file.filename):
         return jsonify({"error": "Invalid file type"}), 400
+
 
     try:
         image_bytes = file.read()
         print(f"📊 Original image size: {len(image_bytes)/1024/1024:.2f}MB")
 
+
         image_bytes = compress_image(image_bytes, max_size_mb=4)
 
+
         print("🔬 Analyzing with OpenAI Vision...")
+
 
         analysis = analyze_image_with_openai(image_bytes)
         analysis = normalize_analysis(analysis)
         result = transform_for_frontend(analysis)
 
+
         print("✅ Analysis complete!")
         return jsonify(result)
+
 
     except json.JSONDecodeError as e:
         print(f"❌ JSON parsing error: {e}")
         return jsonify({"error": "Failed to parse AI response"}), 500
     except Exception as e:
         print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
+
 @app.route('/health', methods=['GET'])
+@cross_origin()
 def health():
     return jsonify({"status": "ok", "model": "gpt-4o-mini"})
+
 
 
 if __name__ == '__main__':
