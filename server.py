@@ -14,11 +14,8 @@ load_dotenv()
 app = Flask(__name__)
 
 # 👇 Add your real Vercel URL here
-CORS(app, origins=[
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://neurospace-orcin.vercel.app",
-])
+CORS(app)
+
 
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
