@@ -10,10 +10,12 @@ import {
   PolarAngleAxis, PolarRadiusAxis, Radar, Legend, Tooltip 
 } from 'recharts';
 
+
 // ✅ API base: local in dev, Render in production
 const API_BASE = import.meta.env.PROD
-  ? "https://neurospace-api.onrender.com" // ← replace with your Render URL
+  ? "https://neurospace-api.onrender.com"
   : "http://127.0.0.1:5000";
+
 
 
 // --- ICON & COLOR MAPS FOR DYNAMIC DATA ---
@@ -30,6 +32,7 @@ const ICON_MAP = {
   'Brain': Brain
 };
 
+
 const COLOR_MAP = {
   1: "bg-orange-500",
   2: "bg-teal-500",
@@ -41,6 +44,7 @@ const COLOR_MAP = {
   8: "bg-emerald-500",
   9: "bg-pink-500"
 };
+
 
 const DEFAULT_ICON_MAP = {
   1: Utensils,
@@ -55,6 +59,7 @@ const DEFAULT_ICON_MAP = {
 };
 
 
+
 // --- FALLBACK DATA (used if no analysis yet) ---
 const FALLBACK_REPORT_DATA = [
   {
@@ -67,6 +72,7 @@ const FALLBACK_REPORT_DATA = [
     tag: "Premium upsell probability: High"
   }
 ];
+
 
 
 // --- REUSABLE COMPONENTS ---
@@ -90,6 +96,7 @@ const MetricCard = ({ icon: Icon, title, value, subtext, trend, trendValue, colo
 );
 
 
+
 const ProgressBar = ({ label, value, colorClass, target }) => (
   <div className="mb-4">
     <div className="flex justify-between mb-1">
@@ -105,9 +112,11 @@ const ProgressBar = ({ label, value, colorClass, target }) => (
 );
 
 
+
 const ImageComparisonSlider = ({ beforeImage, afterImage }) => {
   const [sliderPosition, setSliderPosition] = useState(50);
   const containerRef = useRef(null);
+
 
   const handleDrag = (e) => {
     if (containerRef.current) {
@@ -116,6 +125,7 @@ const ImageComparisonSlider = ({ beforeImage, afterImage }) => {
       setSliderPosition((x / rect.width) * 100);
     }
   };
+
 
   return (
     <div 
@@ -140,6 +150,7 @@ const ImageComparisonSlider = ({ beforeImage, afterImage }) => {
 };
 
 
+
 const HeatmapOverlay = ({ active }) => {
   if (!active) return null;
   return (
@@ -152,6 +163,7 @@ const HeatmapOverlay = ({ active }) => {
     />
   );
 };
+
 
 
 const ObjectBoxes = ({ active, objects }) => {
@@ -174,16 +186,20 @@ const ObjectBoxes = ({ active, objects }) => {
 };
 
 
+
 // --- NEURO SCORECARD (DYNAMIC DATA) ---
 const NeuroScorecard = ({ data }) => {
   const metrics = data?.neuroMetrics || FALLBACK_REPORT_DATA;
+
 
   const getIcon = (item) => {
     if (item.icon && ICON_MAP[item.icon]) return ICON_MAP[item.icon];
     return DEFAULT_ICON_MAP[item.id] || Sparkles;
   };
 
+
   const getColor = (item) => item.color || COLOR_MAP[item.id] || "bg-slate-500";
+
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -196,6 +212,7 @@ const NeuroScorecard = ({ data }) => {
           <Download size={18} /> Export PDF
         </button>
       </div>
+
 
       {/* Overall Score */}
       {data?.scores?.overall && (
@@ -211,6 +228,7 @@ const NeuroScorecard = ({ data }) => {
           </div>
         </div>
       )}
+
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {metrics.map((item) => {
@@ -233,6 +251,7 @@ const NeuroScorecard = ({ data }) => {
                   </span>
                 )}
               </div>
+
 
               <div className="space-y-3">
                 <div>
@@ -268,6 +287,7 @@ const NeuroScorecard = ({ data }) => {
 };
 
 
+
 // --- MAIN APP ---
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -279,6 +299,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
 
+
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -288,23 +309,27 @@ export default function App() {
     }
   };
 
+
   const startAnalysis = async (file) => {
     setAppState('analyzing');
     setProgress(0);
+
 
     const interval = setInterval(() => {
       setProgress(prev => (prev >= 90 ? 90 : prev + 5));
     }, 200);
 
+
     const formData = new FormData();
     formData.append('file', file);
 
+
     try {
-      // 🔥 use API_BASE here
       const response = await fetch(`${API_BASE}/analyze`, {
           method: 'POST',
           body: formData,
       });
+
 
       const data = await response.json();
       if (data.error) throw new Error(data.error);
@@ -316,6 +341,7 @@ export default function App() {
         setAppState('complete');
       }, 500);
 
+
     } catch (error) {
       console.error("Error:", error);
       setError(error.message);
@@ -324,6 +350,7 @@ export default function App() {
     }
   };
 
+
   const resetAnalysis = () => {
     setAppState('idle');
     setAnalysisData(null);
@@ -331,6 +358,7 @@ export default function App() {
     setError(null);
     setActiveTab('dashboard');
   };
+
 
   const renderContent = () => {
     if (appState === 'idle') {
@@ -354,12 +382,13 @@ export default function App() {
             Select Image & Analyze
           </button>
           <div className="mt-8 flex gap-4 text-xs text-slate-400">
-            <span className="flex items-center"><CheckCircle2 size={12} className="mr-1"/> Gemini Vision</span>
+            <span className="flex items-center"><CheckCircle2 size={12} className="mr-1"/> OpenAI Vision</span>
             <span className="flex items-center"><CheckCircle2 size={12} className="mr-1"/> Neuro-Analysis</span>
           </div>
         </div>
       );
     }
+
 
     if (appState === 'analyzing') {
       return (
@@ -377,11 +406,14 @@ export default function App() {
       );
     }
 
+
     if (activeTab === 'reports') {
       return <NeuroScorecard data={analysisData} />;
     }
 
+
     if (!analysisData) return null;
+
 
     return (
       <div className="space-y-6">
@@ -391,6 +423,7 @@ export default function App() {
           <MetricCard icon={DollarSign} title="Avg. Spend" value={`$${analysisData.financials?.currentSpend || 0}`} trend="up" trendValue={`Target: $${analysisData.financials?.predictedSpend || 0}`} color="bg-emerald-500" />
           <MetricCard icon={Eye} title="Visual Clutter" value={(analysisData.scores?.clutter || 0) > 70 ? "High" : "Medium"} subtext="Cognitive Load Impact" color="bg-rose-500" />
         </div>
+
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
@@ -405,6 +438,7 @@ export default function App() {
                 </div>
               </div>
 
+
               <div className="relative rounded-lg overflow-hidden bg-slate-900 min-h-[400px] flex items-center justify-center">
                 {activeOverlays.compare ? (
                   <ImageComparisonSlider beforeImage={uploadedImage} afterImage={analysisData.idealImage} />
@@ -417,6 +451,7 @@ export default function App() {
                 )}
               </div>
             </div>
+
 
             <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
               <h3 className="font-semibold text-slate-800 mb-4">Generative Insights & Recommendations</h3>
@@ -439,23 +474,57 @@ export default function App() {
             </div>
           </div>
 
+
           <div className="space-y-6">
+            {/* 🔥 FIXED RADAR CHART - Added explicit height and grid layout */}
             <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
               <h3 className="text-sm font-semibold text-slate-700 mb-4 text-center">Current vs. Ideal Neuro-State</h3>
-              <div className="h-[250px] w-full text-xs">
+              
+              {/* This is the key fix: explicit height + grid layout */}
+              <div className="w-full h-[300px] grid grid-cols-1">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={analysisData.metrics}>
-                    <PolarGrid />
-                    <PolarAngleAxis dataKey="subject" />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} />
-                    <Radar name="Current" dataKey="A" stroke="#8884d8" fill="#8884d8" fillOpacity={0.4} />
-                    <Radar name="Target" dataKey="B" stroke="#82ca9d" fill="#82ca9d" fillOpacity={0.4} />
-                    <Legend />
-                    <Tooltip />
+                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={analysisData.metrics}>
+                    <PolarGrid stroke="#e5e7eb" />
+                    <PolarAngleAxis 
+                      dataKey="subject" 
+                      tick={{ fill: '#64748b', fontSize: 11 }}
+                    />
+                    <PolarRadiusAxis 
+                      angle={30} 
+                      domain={[0, 100]}
+                      tick={{ fill: '#94a3b8', fontSize: 10 }}
+                    />
+                    <Radar 
+                      name="Current" 
+                      dataKey="A" 
+                      stroke="#6366f1" 
+                      fill="#6366f1" 
+                      fillOpacity={0.5} 
+                    />
+                    <Radar 
+                      name="Target" 
+                      dataKey="B" 
+                      stroke="#10b981" 
+                      fill="#10b981" 
+                      fillOpacity={0.3} 
+                    />
+                    <Legend 
+                      wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
+                      iconType="circle"
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: '#fff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                    />
                   </RadarChart>
                 </ResponsiveContainer>
               </div>
             </div>
+
 
             <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
               <h3 className="text-sm font-semibold text-slate-700 mb-4">Detailed Metrics</h3>
@@ -475,6 +544,7 @@ export default function App() {
     );
   };
 
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex">
       <aside className="w-64 bg-slate-900 text-white hidden md:flex flex-col">
@@ -490,6 +560,7 @@ export default function App() {
           </button>
         </nav>
       </aside>
+
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-10">
