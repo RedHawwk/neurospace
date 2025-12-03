@@ -73,12 +73,53 @@ CRITICAL INSTRUCTIONS:
 - BE BRUTALLY SPECIFIC about what you see in the image (exact colors, materials, layout)
 - QUANTIFY business impact with realistic dollar amounts and percentages
 - IDENTIFY 3-5 specific objects/areas in the image with their approximate positions
-- AVOID generic statements like "warm atmosphere"
+- AVOID generic statements like "warm atmosphere" - instead say "2700K Edison bulbs creating amber glow reducing cortisol 18%"
 - Every score must be justified by something VISIBLE in the image
 
 Return ONLY valid JSON (no markdown, no explanations outside JSON):
 
-{ ... SAME JSON SCHEMA AS BEFORE ... }
+{
+  "scores": {
+    "overall": <number 60-95, be critical - few restaurants score above 85>,
+    "saliency": <number 50-100>,
+    "biophilia": <number 10-90>,
+    "warmth": <number 40-95>,
+    "social": <number 50-90>,
+    "clutter": <number 30-95 where higher = more cluttered>
+  },
+  "neuroMetrics": [
+    { ... },
+    ...
+  ],
+  "metrics": [
+    ...
+  ],
+  "insights": [
+    ...
+  ],
+  "financials": {
+    ...
+  },
+  "objects": [
+    ...
+  ]
+}
+
+ANALYSIS CHECKLIST - Mention in your analysis:
+✓ Exact color temperatures (e.g., 2700K vs 4000K)
+✓ Specific materials (velvet, brass, reclaimed wood, terrazzo, etc.)
+✓ Measurable spacing (table distance, ceiling height if visible)
+✓ Lighting layers (ambient, task, accent - be specific about sources)
+✓ Sight lines and privacy levels
+✓ Traffic flow observations
+✓ Surface textures and finishes
+✓ Biophilic elements count (plants, natural materials, natural light)
+✓ Color psychology with specific hues
+✓ Realistic financial projections based on visible quality tier
+
+Remember: Restaurant owners want ACTIONABLE INSIGHTS with MEASURABLE IMPACT, not academic theory.
+"""
+
 """  # keep your full JSON schema here – I’m shortening for brevity
 
 
@@ -145,6 +186,47 @@ def transform_for_frontend(analysis_data):
     analysis_data['idealImage'] = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1000&auto=format&fit=crop"
 
     return analysis_data
+def normalize_analysis(analysis):
+    """Ensure the JSON has all fields the frontend expects."""
+
+    # --- Scores ---
+    scores = analysis.get("scores") or {}
+    analysis["scores"] = {
+        "overall": scores.get("overall", 70),
+        "saliency": scores.get("saliency", 65),
+        "biophilia": scores.get("biophilia", 40),
+        "warmth": scores.get("warmth", 60),
+        "social": scores.get("social", 55),
+        "clutter": scores.get("clutter", 50),
+    }
+
+    # --- Financials ---
+    fin = analysis.get("financials") or {}
+    analysis["financials"] = {
+        "currentDwell": fin.get("currentDwell", 45),
+        "predictedDwell": fin.get("predictedDwell", 60),
+        "currentSpend": fin.get("currentSpend", 30),
+        "predictedSpend": fin.get("predictedSpend", 36),
+        "monthlyRevenueUplift": fin.get("monthlyRevenueUplift", 5000),
+    }
+
+    # --- Metrics for radar chart ---
+    if not analysis.get("metrics"):
+        s = analysis["scores"]
+        analysis["metrics"] = [
+            {"subject": "Biophilia", "A": s["biophilia"], "B": 85, "fullMark": 100},
+            {"subject": "Warmth", "A": s["warmth"], "B": 90, "fullMark": 100},
+            {"subject": "Social Layout", "A": s["social"], "B": 80, "fullMark": 100},
+            {"subject": "Lighting", "A": 75, "B": 95, "fullMark": 100},
+            {"subject": "Cleanliness", "A": 70, "B": 90, "fullMark": 100},
+            {"subject": "Acoustics", "A": 65, "B": 75, "fullMark": 100},
+        ]
+
+    # --- Neuro Metrics (cards) ---
+    if "neuroMetrics" not in analysis or not analysis["neuroMetrics"]:
+        analysis["neuroMetrics"] = []
+
+    return analysis
 
 
 @app.route('/analyze', methods=['POST'])
@@ -171,6 +253,7 @@ def analyze():
         print("🔬 Analyzing with OpenAI Vision...")
 
         analysis = analyze_image_with_openai(image_bytes)
+        analysis = normalize_analysis(analysis)
         result = transform_for_frontend(analysis)
 
         print("✅ Analysis complete!")
