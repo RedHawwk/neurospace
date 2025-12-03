@@ -120,10 +120,40 @@ ANALYSIS CHECKLIST - Mention in your analysis:
 Remember: Restaurant owners want ACTIONABLE INSIGHTS with MEASURABLE IMPACT, not academic theory.
 """
 
-"""  # keep your full JSON schema here – I’m shortening for brevity
+
 
 
 def analyze_image_with_openai(image_bytes):
+    image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    response = openai_client.chat.completions.create(
+        model="gpt-4o-mini",
+        response_format={"type": "json_object"},   # ✅ VERY IMPORTANT
+        messages=[
+            {"role": "system", "content": NEURO_ANALYSIS_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Analyze this restaurant interior strictly using the schema."},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_b64}"
+                        }
+                    }
+                ]
+            }
+        ],
+        temperature=0.6,
+        max_tokens=3500,
+    )
+
+    raw = response.choices[0].message.content
+
+    print("🔍 RAW OPENAI OUTPUT:\n", raw[:1200])   # ← THIS WILL SHOW US IF JSON IS BROKEN
+
+    return json.loads(raw)
+
     """Call OpenAI vision model and return parsed JSON"""
     base64_image = base64.b64encode(image_bytes).decode("utf-8")
 
