@@ -9,12 +9,27 @@ import re
 from PIL import Image
 import io
 
+
 load_dotenv()
 
 app = Flask(__name__)
 
-# CORS - simple and permissive so Vercel/frontend can call it
-CORS(app)
+# 🔥 FIXED CORS - Allow both local and production origins
+CORS(app, 
+     resources={r"/*": {
+         "origins": [
+             "http://localhost:5173",           # Vite local dev
+             "http://localhost:3000",           # React local dev  
+             "http://127.0.0.1:5173",
+             "https://neurospace-orcin.vercel.app",  # Your Vercel frontend
+             "https://*.vercel.app"              # All Vercel preview deployments
+         ],
+         "methods": ["GET", "POST", "OPTIONS"],
+         "allow_headers": ["Content-Type"],
+         "supports_credentials": False,
+         "max_age": 3600
+     }}
+)
 
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
@@ -253,7 +268,7 @@ def analyze_image_with_openai(image_bytes: bytes) -> dict:
 
     response = openai_client.chat.completions.create(
         model="gpt-4o-mini",
-        response_format={"type": "json_object"},   # forces JSON response
+        response_format={"type": "json_object"},
         messages=[
             {
                 "role": "system",
@@ -309,7 +324,6 @@ def transform_for_frontend(analysis_data: dict) -> dict:
             metric['icon'] = icon_map.get(mid, "Sparkles")
             metric['color'] = color_map.get(mid, "bg-slate-500")
 
-    # Static ideal image for now (frontend expects this)
     analysis_data['idealImage'] = (
         "https://images.unsplash.com/photo-1559339352-11d035aa65de"
         "?q=80&w=1000&auto=format&fit=crop"
@@ -323,7 +337,6 @@ def normalize_analysis(analysis: dict) -> dict:
     if analysis is None:
         analysis = {}
 
-    # --- Scores ---
     scores = analysis.get("scores") or {}
     analysis["scores"] = {
         "overall": scores.get("overall", 75),
@@ -334,7 +347,6 @@ def normalize_analysis(analysis: dict) -> dict:
         "clutter": scores.get("clutter", 50),
     }
 
-    # --- Financials ---
     fin = analysis.get("financials") or {}
     analysis["financials"] = {
         "currentDwell": fin.get("currentDwell", 45),
@@ -344,7 +356,6 @@ def normalize_analysis(analysis: dict) -> dict:
         "monthlyRevenueUplift": fin.get("monthlyRevenueUplift", 5000),
     }
 
-    # --- Metrics for radar chart ---
     if not analysis.get("metrics"):
         s = analysis["scores"]
         analysis["metrics"] = [
@@ -356,7 +367,6 @@ def normalize_analysis(analysis: dict) -> dict:
             {"subject": "Acoustics", "A": 65, "B": 75, "fullMark": 100},
         ]
 
-    # --- Neuro Metrics (cards) ---
     neuro = analysis.get("neuroMetrics") or []
     cleaned = []
     next_id = 1
@@ -373,7 +383,6 @@ def normalize_analysis(analysis: dict) -> dict:
         })
         next_id += 1
 
-    # If model gave nothing at all, make at least 2 cards
     if not cleaned:
         overall_10 = round(analysis["scores"]["overall"] / 10, 1)
         cleaned = [
@@ -399,7 +408,6 @@ def normalize_analysis(analysis: dict) -> dict:
 
     analysis["neuroMetrics"] = cleaned
 
-    # Ensure insights & objects exist
     if "insights" not in analysis or not isinstance(analysis["insights"], list):
         analysis["insights"] = []
 
@@ -409,8 +417,12 @@ def normalize_analysis(analysis: dict) -> dict:
     return analysis
 
 
-@app.route('/analyze', methods=['POST'])
+@app.route('/analyze', methods=['POST', 'OPTIONS'])
 def analyze():
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        return '', 204
+    
     print("🧠 NeuroSpace: Received image for analysis...")
 
     if 'file' not in request.files:
@@ -453,5 +465,6 @@ def health():
 
 
 if __name__ == '__main__':
-    print("🚀 NeuroSpace AI Server running on port 5000...")
-    app.run(debug=True, port=5000)
+    print("🚀 NeuroSpace AI Server running...")
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
