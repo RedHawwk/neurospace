@@ -15,7 +15,12 @@ from openai import OpenAI
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5173", "http://127.0.0.1:5173"])
+CORS(app, origins=[
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://YOUR_VERCEL_URL_HERE"
+])
+
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
