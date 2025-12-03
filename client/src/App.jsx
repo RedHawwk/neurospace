@@ -314,25 +314,34 @@ export default function App() {
     setAppState('analyzing');
     setProgress(0);
 
-
     const interval = setInterval(() => {
       setProgress(prev => (prev >= 90 ? 90 : prev + 5));
     }, 200);
 
-
     const formData = new FormData();
     formData.append('file', file);
 
-
     try {
+      console.log(`📤 Sending request to: ${API_BASE}/analyze`);
+      
       const response = await fetch(`${API_BASE}/analyze`, {
           method: 'POST',
           body: formData,
+          // Don't set Content-Type header - browser will set it with boundary for multipart
       });
 
+      console.log(`📥 Response status: ${response.status}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
 
       const data = await response.json();
-      if (data.error) throw new Error(data.error);
+      console.log(`✅ Data received:`, data);
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
       
       clearInterval(interval);
       setProgress(100);
@@ -341,10 +350,9 @@ export default function App() {
         setAppState('complete');
       }, 500);
 
-
     } catch (error) {
-      console.error("Error:", error);
-      setError(error.message);
+      console.error("❌ Analysis Error:", error);
+      setError(error.message || "Failed to connect to API server");
       setAppState('idle');
       clearInterval(interval);
     }
