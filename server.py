@@ -16,8 +16,21 @@ load_dotenv()
 app = Flask(__name__)
 
 
-# 🔥 SIMPLER CORS - Allow all origins (works reliably on Render)
-CORS(app, origins="*", supports_credentials=False)
+# 🔥 ENHANCED CORS Configuration
+CORS(app, 
+     resources={r"/*": {"origins": "*"}},
+     methods=["GET", "POST", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization"],
+     supports_credentials=False)
+
+
+# Additional CORS headers for all responses
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
 
 
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
@@ -313,9 +326,9 @@ def analyze_image_with_openai(image_bytes: bytes) -> dict:
         return json.loads(raw)
     except json.JSONDecodeError:
         cleaned = raw.strip()
-        if cleaned.startswith("```
+        if cleaned.startswith("```"):
             cleaned = re.sub(r"^```(?:json)?", "", cleaned)
-            cleaned = re.sub(r"```
+            cleaned = re.sub(r"```$", "", cleaned)
         return json.loads(cleaned)
 
 
@@ -471,55 +484,59 @@ def handle_exception(e):
 
 
 
-@app.route('/analyze', methods=['POST'])
+@app.route('/analyze', methods=['POST', 'OPTIONS'])
 @cross_origin()
 def analyze():
+    # Handle preflight requests
+    if request.method == 'OPTIONS':
+        return '', 204
+    
     print("🧠 NeuroSpace: Received image for analysis...")
 
-
     if 'file' not in request.files:
+        print("❌ No file part in request")
         return jsonify({"error": "No file part"}), 400
-
 
     file = request.files['file']
 
-
     if file.filename == '':
+        print("❌ No file selected")
         return jsonify({"error": "No selected file"}), 400
 
-
     if not allowed_file(file.filename):
+        print(f"❌ Invalid file type: {file.filename}")
         return jsonify({"error": "Invalid file type"}), 400
-
 
     try:
         image_bytes = file.read()
         print(f"📊 Original image size: {len(image_bytes)/1024/1024:.2f}MB")
 
+        if len(image_bytes) == 0:
+            return jsonify({"error": "Empty file uploaded"}), 400
 
         image_bytes = compress_image(image_bytes, max_size_mb=4)
 
-
         print("🔬 Analyzing with OpenAI Vision...")
-
-
+        
         analysis = analyze_image_with_openai(image_bytes)
+        print(f"📋 Analysis received, normalizing...")
+        
         analysis = normalize_analysis(analysis)
+        print(f"🎨 Transforming for frontend...")
+        
         result = transform_for_frontend(analysis)
 
-
         print("✅ Analysis complete!")
-        return jsonify(result)
-
+        return jsonify(result), 200
 
     except json.JSONDecodeError as e:
         print(f"❌ JSON parsing error: {e}")
-        return jsonify({"error": "Failed to parse AI response"}), 500
+        return jsonify({"error": "Failed to parse AI response", "details": str(e)}), 500
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Unexpected error: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e), "type": type(e).__name__}), 500
 
 
 
