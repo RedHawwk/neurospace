@@ -12,7 +12,7 @@ import {
 
 // ✅ API base: local in dev, Render in production
 const API_BASE = import.meta.env.PROD
-  ? "https://YOUR-RENDER-URL.onrender.com" // ← replace with your Render URL
+  ? "https://neurospace-api.onrender.com" // ← replace with your Render URL
   : "http://127.0.0.1:5000";
 
 
@@ -302,8 +302,8 @@ export default function App() {
     try {
       // 🔥 use API_BASE here
       const response = await fetch(`${API_BASE}/analyze`, {
-        method: 'POST',
-        body: formData,
+          method: 'POST',
+          body: formData,
       });
 
       const data = await response.json();
